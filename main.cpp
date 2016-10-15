@@ -11,6 +11,9 @@ using namespace std;
 int readImageHeader(char[], int&, int&);
 int readImage(char[], Image&);
 int writeImage(char[], Image&);
+int saveMaxMin(char[], Image&);
+Image turnToGreyscale(Image&);
+int saveHistogram(char[], Image&, int);
 
 int main(int argc, char *argv[])
 {
@@ -31,7 +34,7 @@ int main(int argc, char *argv[])
 	readImage(argv[1], image);
     
 	// Print menu
-	while(0 <= choice && choice < 5)
+	while(0 <= choice && choice < 7)
 	{
         	cout << "Option menu:" << endl;
 		cout << "[0] Quit" << endl;
@@ -43,7 +46,15 @@ int main(int argc, char *argv[])
 			cout << "[3] Set the blue value of a pixel" << endl;
 			cout << "[4] Set the value of a pixel" << endl << endl;
         	}
-        	else
+        	else if(argc == 3) // One input image and one output file
+		{
+			cout << "[5] Write file with maximum and minimum color values" << endl;
+		}
+		else if(argc == 4) // One input image one output file and one integer
+		{
+			cout << "[6] Write file with histogram" << endl;
+		}
+		else
 		{
 			cout << "ERROR" << endl;
 		}
@@ -100,6 +111,14 @@ int main(int argc, char *argv[])
 				temp_blue = 0;
                 		writeImage(argv[1], image);
                 		break;
+			case 5: // [5] Write file with maximum and minimum color values
+				saveMaxMin(argv[2], image);
+				cout << "Data written in file " << argv[2] << endl;
+				break;
+			case 6: // [6] Write file with histogram
+				saveHistogram(argv[2], image, (int) argv[3]);
+				cout << "Histogram written in file " << argv[2] << endl;
+				break;
 			default:
                 		cout << "Unexpected value: closing the program." << endl;
                 		break;
@@ -160,15 +179,11 @@ int readImageHeader(char filename[], int& H, int& W)
     	ifp.read(secondInteger, 4);
 	cout << "read2" << endl;
 	cout << "secondInteger: " << secondInteger << endl;
-	//If a thread is killed, these next two lines are the cause TODO TODO TODO TODO
-	H = (unsigned char) firstInteger[3]+(unsigned char) 256*firstInteger[2]+
-		 (unsigned char) 256*256*firstInteger[1]+(unsigned char) 256*256*256*firstInteger[0];
-	W = (unsigned char) secondInteger[3]+(unsigned char) 256*secondInteger[2]+
-		(unsigned char) 256*256*secondInteger[1]+(unsigned char) 256*256*256*secondInteger[0];
-	cout << "H: " << H << endl;
-	cout << "W: " << W << endl;
-	H = 2;
-	W = 2;
+	//LITTLE ENDIAN
+	H = (int) firstInteger[0]+(int) 256*firstInteger[1]+
+		 (int) 256*256*firstInteger[2]+(int) 256*256*256*firstInteger[3];
+	W = (int) secondInteger[0]+(int) 256*secondInteger[1]+
+		(int) 256*256*secondInteger[2]+(int) 256*256*256*secondInteger[3];
 	cout << "operate" << endl;
 	cout << "H: " << H << endl;
 	cout << "W: " << W << endl;
@@ -191,14 +206,14 @@ int writeImage(char filename[], Image& image)
         	exit(1);
     	}
 
-    	ofp << (unsigned char) H/256*256*256;
-	ofp << (unsigned char) H/256*256;
-	ofp << (unsigned char) H/256;
     	ofp << (unsigned char) H % 256;
-    	ofp << (unsigned char) W/256*256*256;
-	ofp << (unsigned char) W/256*256;
-	ofp << (unsigned char) W/256;
+	ofp << (unsigned char) H/256;
+	ofp << (unsigned char) H/256*256;
+    	ofp << (unsigned char) H/256*256*256;
     	ofp << (unsigned char) W % 256;
+	ofp << (unsigned char) W/256;
+	ofp << (unsigned char) W/256*256;
+    	ofp << (unsigned char) W/256*256*256;
 
    	ofp.write( reinterpret_cast<char *>(image.red_data), (H*W)*sizeof(char));
     	ofp.write( reinterpret_cast<char *>(image.green_data), (H*W)*sizeof(char));
@@ -211,6 +226,87 @@ int writeImage(char filename[], Image& image)
     	}
 
     	ofp.close();
+
+    	return(1);
+}
+
+int saveMaxMin(char filename[], Image& image){
+
+	int *output = image.computeMaxMin();
+	ofstream ofp;
+
+    	ofp.open(filename, ios::out | ios::binary);
+
+    	if (!ofp) 
+    	{
+        	cout << "Can't open file " << filename << endl;
+        	exit(1);
+    	}
+	
+	for (int i=0;i<5;i++)
+	{
+	ofp << output[i];
+	ofp << " ";
+	}
+	ofp << output[5];
+
+	if (ofp.fail()) 
+    	{
+        	cout << "Can't write image " << filename << endl;
+        	exit(0);
+    	}
+
+	ofp.close();
+
+    	return(1);
+}
+
+Image turnToGreyscale(Image& image)
+{
+	int H = image.H, W = image.W;
+	int size = H*W;
+	Image greyImage(H, W);
+	for (int i=0;i<size;i++)
+	{
+		greyImage.red_data[i] = image.red_data[i]*0.3;
+	}
+	for (int i=0;i<size;i++)
+	{
+		greyImage.green_data[i] = image.green_data[i]*0.59;
+	}
+	for (int i=0;i<size;i++)
+	{
+		greyImage.blue_data[i] = image.blue_data[i]*0.11;
+	}
+
+    	return greyImage;
+}
+
+//TODO make histogram
+int saveHistogram(char filename[], Image& image, int interval){
+
+	/*Image grey = turnToGreyscale(image);
+	int H = grey.H, W = grey.W;
+	int size = H*W;
+	ofstream ofp;
+
+    	ofp.open(filename, ios::out | ios::binary);
+
+    	if (!ofp) 
+    	{
+        	cout << "Can't open file " << filename << endl;
+        	exit(1);
+    	}
+
+	//TODO make histogram here
+
+	if (ofp.fail()) 
+    	{
+        	cout << "Can't write image " << filename << endl;
+        	exit(0);
+    	}
+
+	ofp.close();*/
 
     	return(1);
 }

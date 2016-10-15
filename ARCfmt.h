@@ -12,6 +12,7 @@ class Image
 		void setGreenPixelValue(int position, unsigned char green_value);
 		void setBluePixelValue(int position, unsigned char blue_value);
 		void rotateImage(int angle);
+		int *computeMaxMin();
 		int H; // HEIGHT
 		int W; // WIDTH
 		unsigned char *red_data;
