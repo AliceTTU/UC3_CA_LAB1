@@ -116,7 +116,7 @@ int main(int argc, char *argv[])
 				cout << "Data written in file " << argv[2] << endl;
 				break;
 			case 6: // [6] Write file with histogram
-				saveHistogram(argv[2], image, (int) argv[3]);
+				saveHistogram(argv[2], image, atoi(argv[3]));
 				cout << "Histogram written in file " << argv[2] << endl;
 				break;
 			default:
@@ -131,8 +131,6 @@ int main(int argc, char *argv[])
 
 int readImage(char filename[], Image& image)
 {
-    	char *charImage;
-	//unsigned char header;
     	ifstream ifp;
 
    	ifp.open(filename, ios::in | ios::binary);
@@ -143,17 +141,13 @@ int readImage(char filename[], Image& image)
         	exit(1);
     	}
 
-    	//ifp.getline(header, 1);
 
-    	charImage = (char *) new char [image.H*image.W*3];
-
+	ifp.seekg(2*sizeof(int),ifp.beg);
     	ifp.read( reinterpret_cast<char *>(image.red_data), (image.H*image.W)*sizeof(char));
 	ifp.read( reinterpret_cast<char *>(image.green_data), (image.H*image.W)*sizeof(char));
 	ifp.read( reinterpret_cast<char *>(image.blue_data), (image.H*image.W)*sizeof(char));
 
     	ifp.close();
-
-    	delete [] charImage;
 
     	return (1);
 }
@@ -198,7 +192,7 @@ int writeImage(char filename[], Image& image)
 	int H = image.H, W = image.W;    	
 	ofstream ofp;
 
-    	ofp.open(filename, ios::out | ios::binary);
+    	ofp.open(filename, ios::out | ios::binary | ios::trunc);
 
     	if (!ofp) 
     	{
@@ -206,16 +200,15 @@ int writeImage(char filename[], Image& image)
         	exit(1);
     	}
 
-    	ofp << (unsigned char) H % 256;
-	ofp << (unsigned char) H/256;
-	ofp << (unsigned char) H/256*256;
-    	ofp << (unsigned char) H/256*256*256;
-    	ofp << (unsigned char) W % 256;
-	ofp << (unsigned char) W/256;
-	ofp << (unsigned char) W/256*256;
-    	ofp << (unsigned char) W/256*256*256;
-
-   	ofp.write( reinterpret_cast<char *>(image.red_data), (H*W)*sizeof(char));
+	ofp << (char)(H%256);
+	ofp << (char)(H/256);
+	ofp << (char)(H/256*256);
+	ofp << (char)(H/256*256*256);
+	ofp << (char)(W%256);
+	ofp << (char)(W/256);
+	ofp << (char)(W/256*256);
+	ofp << (char)(W/256*256*256);	
+	ofp.write( reinterpret_cast<char *>(image.red_data), (H*W)*sizeof(char));
     	ofp.write( reinterpret_cast<char *>(image.green_data), (H*W)*sizeof(char));
     	ofp.write( reinterpret_cast<char *>(image.blue_data), (H*W)*sizeof(char));
 
@@ -266,28 +259,37 @@ Image turnToGreyscale(Image& image)
 	int H = image.H, W = image.W;
 	int size = H*W;
 	Image greyImage(H, W);
+	// Experimental order for performance (may be worse than operating directly)
 	for (int i=0;i<size;i++)
 	{
-		greyImage.red_data[i] = image.red_data[i]*0.3;
+		greyImage.red_data[i] = (char)((int)image.red_data[i]*0.3);
 	}
 	for (int i=0;i<size;i++)
 	{
-		greyImage.green_data[i] = image.green_data[i]*0.59;
+		greyImage.green_data[i] = (char) ((int)image.green_data[i]*0.59)+image.red_data[i];
 	}
 	for (int i=0;i<size;i++)
 	{
-		greyImage.blue_data[i] = image.blue_data[i]*0.11;
+		greyImage.blue_data[i] = (char) ((int)image.blue_data[i]*0.11)+image.green_data[i];
+		greyImage.green_data[i] = image.blue_data[i];
+	}
+	for (int i=0;i<size;i++)
+	{
+		greyImage.red_data[i] = image.blue_data[i];
 	}
 
     	return greyImage;
 }
 
-//TODO make histogram
+//TODO
 int saveHistogram(char filename[], Image& image, int interval){
 
-	/*Image grey = turnToGreyscale(image);
-	int H = grey.H, W = grey.W;
+	/*int H = image.H, W = image.W;
 	int size = H*W;
+	int interval_limit = 256/interval;
+	static int *histogram = new int [interval];
+	Image grey(H, W);
+	grey = turnToGreyscale(image);
 	ofstream ofp;
 
     	ofp.open(filename, ios::out | ios::binary);
@@ -298,7 +300,33 @@ int saveHistogram(char filename[], Image& image, int interval){
         	exit(1);
     	}
 
-	//TODO make histogram here
+	for (int i=0;i<interval;i++)
+	{
+		histogram[i] = 0;
+	}
+
+	for (int i=0;i<size;i++)
+	{
+		cout << (int) grey.red_data[i] << " ";
+		cout << ((int) grey.red_data[i])/interval_limit << " ";
+		if (((int) grey.red_data[i])/interval_limit > interval_limit*interval)
+		{
+			histogram[interval-1]++;
+			cout << histogram[interval-1] << endl;
+		}
+		else
+		{
+			histogram[((int) grey.red_data[i])/interval_limit]++;
+			cout << histogram[((int) grey.red_data[i])/interval_limit] << endl;
+		}
+	}
+
+	for (int i=0;i<interval-1;i++)
+	{
+	ofp << histogram[i];
+	ofp << " ";
+	}
+	ofp << histogram[interval-1];
 
 	if (ofp.fail()) 
     	{
