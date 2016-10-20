@@ -14,6 +14,7 @@ int writeImage(char[], Image&);
 int saveMaxMin(char[], Image&);
 Image turnToGreyscale(Image&);
 int saveHistogram(char[], Image&, int);
+int maskImage(char[], char[], Image&);
 
 int main(int argc, char *argv[])
 {
@@ -34,7 +35,7 @@ int main(int argc, char *argv[])
 	readImage(argv[1], image);
     
 	// Print menu
-	while(0 <= choice && choice < 7)
+	while(0 <= choice && choice < 8)
 	{
         	cout << "Option menu:" << endl;
 		cout << "[0] Quit" << endl;
@@ -50,9 +51,10 @@ int main(int argc, char *argv[])
 		{
 			cout << "[5] Write file with maximum and minimum color values" << endl;
 		}
-		else if(argc == 4) // One input image one output file and one integer
+		else if(argc == 4)
 		{
-			cout << "[6] Write file with histogram" << endl;
+			cout << "[6] Write file with histogram" << endl; // One input image one output file and one integer
+			cout << "[7] Apply mask file" << endl; // Two input images one output file
 		}
 		else
 		{
@@ -118,6 +120,10 @@ int main(int argc, char *argv[])
 			case 6: // [6] Write file with histogram
 				saveHistogram(argv[2], image, atoi(argv[3]));
 				cout << "Histogram written in file " << argv[2] << endl;
+				break;
+			case 7: // [7] Apply mask file
+				maskImage(argv[3], argv[2], image);
+				cout << "Masked image written in file " << argv[3] << endl;
 				break;
 			default:
                 		cout << "Unexpected value: closing the program." << endl;
@@ -266,27 +272,28 @@ Image turnToGreyscale(Image& image)
 	}
 	for (int i=0;i<size;i++)
 	{
-		greyImage.green_data[i] = (char) ((int)image.green_data[i]*0.59)+image.red_data[i];
+		greyImage.green_data[i] = (char) ((int)image.green_data[i]*0.59)+greyImage.red_data[i];
 	}
 	for (int i=0;i<size;i++)
 	{
-		greyImage.blue_data[i] = (char) ((int)image.blue_data[i]*0.11)+image.green_data[i];
-		greyImage.green_data[i] = image.blue_data[i];
+		greyImage.blue_data[i] = (char) ((int)image.blue_data[i]*0.11)+greyImage.green_data[i];
+		greyImage.green_data[i] = greyImage.blue_data[i];
 	}
 	for (int i=0;i<size;i++)
 	{
-		greyImage.red_data[i] = image.blue_data[i];
+		greyImage.red_data[i] = greyImage.blue_data[i];
 	}
 
     	return greyImage;
 }
 
-//TODO
+
 int saveHistogram(char filename[], Image& image, int interval){
 
-	/*int H = image.H, W = image.W;
+	int H = image.H, W = image.W;
 	int size = H*W;
 	int interval_limit = 256/interval;
+	int interval_limit2 = 256/(256%interval);
 	static int *histogram = new int [interval];
 	Image grey(H, W);
 	grey = turnToGreyscale(image);
@@ -307,18 +314,7 @@ int saveHistogram(char filename[], Image& image, int interval){
 
 	for (int i=0;i<size;i++)
 	{
-		cout << (int) grey.red_data[i] << " ";
-		cout << ((int) grey.red_data[i])/interval_limit << " ";
-		if (((int) grey.red_data[i])/interval_limit > interval_limit*interval)
-		{
-			histogram[interval-1]++;
-			cout << histogram[interval-1] << endl;
-		}
-		else
-		{
-			histogram[((int) grey.red_data[i])/interval_limit]++;
-			cout << histogram[((int) grey.red_data[i])/interval_limit] << endl;
-		}
+		histogram[((int) grey.red_data[i]-(grey.red_data[i]/interval_limit2))/interval_limit]++;
 	}
 
 	for (int i=0;i<interval-1;i++)
@@ -334,7 +330,86 @@ int saveHistogram(char filename[], Image& image, int interval){
         	exit(0);
     	}
 
-	ofp.close();*/
+	ofp.close();
+
+    	return(1);
+}
+
+
+int maskImage(char filename[], char filenameMask[], Image& image)
+{
+	int H = image.H, W = image.W;
+	int HMask, WMask;
+	readImageHeader(filenameMask, HMask, WMask);
+	Image mask(HMask,WMask);
+	readImage(filenameMask, mask);
+
+	ofstream ofp;
+
+    	ofp.open(filename, ios::out | ios::binary | ios::trunc);
+
+    	if (!ofp) 
+    	{
+        	cout << "Can't open file " << filename << endl;
+        	exit(1);
+    	}
+
+	ofp << (char)(H%256);
+	ofp << (char)(H/256);
+	ofp << (char)(H/256*256);
+	ofp << (char)(H/256*256*256);
+	ofp << (char)(W%256);
+	ofp << (char)(W/256);
+	ofp << (char)(W/256*256);
+	ofp << (char)(W/256*256*256);
+
+	//No matter the size of the images, it is always done correctly from 0,0 with the use of these variables
+	int Hlimit = HMask, Wlimit = WMask;
+	if (H<=HMask)
+	{
+		Hlimit = H;
+	}
+	if (W<=WMask)
+	{
+		Wlimit = W;
+	}
+
+	// Experimental order for performance (may be worse than operating directly)
+	int i,j;
+	for (i=0;i<Hlimit;i++)
+	{
+		for (j=0;j<Wlimit;j++)
+		{
+			image.red_data[i*W+j]=image.red_data[i*W+j]*mask.red_data[i*WMask+j];
+		}
+	}
+	for (i=0;i<Hlimit;i++)
+	{
+		for (j=0;j<Wlimit;j++)
+		{
+			image.green_data[i*W+j]=image.green_data[i*W+j]*mask.green_data[i*WMask+j];
+		}
+	}
+	for (i=0;i<Hlimit;i++)
+	{
+		for (j=0;j<Wlimit;j++)
+		{
+			image.blue_data[i*W+j]=image.blue_data[i*W+j]*mask.blue_data[i*WMask+j];
+		}
+	}
+
+
+	ofp.write( reinterpret_cast<char *>(image.red_data), (H*W)*sizeof(char));
+    	ofp.write( reinterpret_cast<char *>(image.green_data), (H*W)*sizeof(char));
+    	ofp.write( reinterpret_cast<char *>(image.blue_data), (H*W)*sizeof(char));
+
+    	if (ofp.fail()) 
+    	{
+        	cout << "Can't write image " << filename << endl;
+        	exit(0);
+    	}
+
+    	ofp.close();
 
     	return(1);
 }
