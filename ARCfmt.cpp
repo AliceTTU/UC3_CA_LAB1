@@ -138,9 +138,3 @@ int *Image::computeMaxMin()
 
 }
 
-// TODO
-void Image::rotateImage(int angle)
-{
-   
-}
-
