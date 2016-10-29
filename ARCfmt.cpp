@@ -97,9 +97,44 @@ void Image::setBluePixelValue(int position, unsigned char blue_value)
 	cout << "That position doesn't exist" << endl;
 }
 
-// TODO
-void Image::rotateImage(int angle)
+int *Image::computeMaxMin()
 {
-   
+	int size = H*W;	
+	static int output[6] = {0,255,0,255,0,255};
+	for (int i=0;i<size;i++)
+	{
+		if(red_data[i]>output[0])
+		{
+			output[0]=red_data[i];
+		}
+		if(red_data[i]<output[1])
+		{
+			output[1]=red_data[i];
+		}
+	}
+	for (int i=0;i<size;i++)
+	{
+		if(green_data[i]>output[2])
+		{
+			output[2]=green_data[i];
+		}
+		if(green_data[i]<output[3])
+		{
+			output[3]=green_data[i];
+		}
+	}
+	for (int i=0;i<size;i++)
+	{
+		if(blue_data[i]>output[4])
+		{
+			output[4]=blue_data[i];
+		}
+		if(blue_data[i]<output[5])
+		{
+			output[5]=blue_data[i];
+		}
+	}
+	return output;
+
 }
 
